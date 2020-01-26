@@ -1,0 +1,2 @@
+Cactus on map start can spawn next to buildings.
+Cactus should maybe prioritize mechs over buildings?
