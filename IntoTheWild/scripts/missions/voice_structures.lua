@@ -31,10 +31,18 @@ function this:load()
 		for i,p in ipairs(criticals) do
 			if not Board:IsDamaged(p) then
 				script = script .. string.format([[
-					local p, mID, fx = %s, %q, SkillEffect();
-					fx:AddScript(string.format("if Board:IsDamaged(%%s) then lmn_Jungle_Structure_Voice(%%q) end", p:GetString(), mID));
-					Board:AddEffect(fx);
-					
+					modApi:conditionalHook(
+						function()
+							return not Board or not Board:IsBusy();
+						end,
+						function()
+							if Board then
+								local p, mID, fx = %s, %q, SkillEffect();
+								fx:AddScript(string.format("if Board:IsDamaged(%%s) then lmn_Jungle_Structure_Voice(%%q) end", p:GetString(), mID));
+								Board:AddEffect(fx);
+							end
+						end
+					)
 				]], p:GetString(), mission.ID)
 			end
 		end
