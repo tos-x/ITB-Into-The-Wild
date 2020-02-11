@@ -2,7 +2,7 @@
 local mod = {
 	id = "lmn_into_the_wild",
 	name = "Into The Wild",
-	version = "1.1.5",
+	version = "1.1.6",
 	modApiVersion = "2.3.0",
 	icon = "img/mod_icon.png",
 	requirements = {}
