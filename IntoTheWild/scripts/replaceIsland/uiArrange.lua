@@ -3,6 +3,8 @@ local path = mod_loader.mods[modApi.currentMod].scriptPath
 local ceo_rst_gray = require(path .."replaceIsland/ceo_rst_grayscale")
 local this = {}
 
+local islandRandomize = false
+
 function this.loadIslandOrder()
 	local m = lmn_replace_island
 	
@@ -25,6 +27,8 @@ function this.loadIslandOrder()
 			i = i + 1
 			order[island] = i
 		end
+		
+		islandRandomize = obj.islandRandomize or false
 	end)
 	
 	for island, _ in pairs(m.islands) do
@@ -34,9 +38,36 @@ function this.loadIslandOrder()
 		end
 	end
 	
+	if not isContinuePresent() and islandRandomize then
+		local keys, j = {}, 1
+		for k,_ in pairs(m.islands) do
+			keys[j] = k
+			j= j+1
+		end
+	
+		math.randomseed(os.time())
+		for j=0,30 do --num swaps
+			local k1 = math.random(1, #keys)
+			local k2 = math.random(1, #keys)
+			if not m.unlockRst and k1 ~= 4 and k2 ~= 4 then   --not RST
+				order[keys[k1]], order[keys[k2]] = order[keys[k2]], order[keys[k1]]
+			end
+		end
+	end
+
 	table.sort(m.islandOrder, function(a,b)
 		return order[a] < order[b]
 	end)
+	
+	lmn_replace_island.saveIslandOrder()
+end
+
+function isContinuePresent()
+  local path = os.getKnownFolder(5).."/My Games/Into the Breach/"
+  local profilePath = path.."profile_"..Settings.last_profile.."/"
+  local savePath = profilePath.."saveData.lua"
+
+  return modApi:fileExists(savePath)
 end
 
 function this.saveIslandOrder()
@@ -44,11 +75,13 @@ function this.saveIslandOrder()
 	
 	sdlext.config("modcontent.lua", function(obj)
 		obj.islandOrder = m.islandOrder
+		obj.islandRandomize = islandRandomize
 	end)
 end
 
 -- ui based heavily on pilot_arrange.lua from the mod_loader.
 function this.createUi()
+	local checkbox
 	local m = lmn_replace_island
 	
 	local islandButtons = {}
@@ -59,6 +92,7 @@ function this.createUi()
 		for i = 1, #islandButtons do
 			m.islandOrder[i] = islandButtons[i].id
 		end
+		islandRandomize = checkbox.checked
 		
 		m.saveIslandOrder()
 	end
@@ -99,7 +133,7 @@ function this.createUi()
 		local function rearrange()
 			local index = list_indexof(islandButtons, placeholder)
 			if index ~= nil and draggedElement ~= nil then
-				local col = math.floor(draggedElement.x / cellW + 0.5)
+				local col = math.floor(draggedElement.x / cellW + 0.5)-1
 				local row = math.floor(draggedElement.y / cellH + 0.5)
 				local desiredIndex = 1 + col + row * portraitsPerRow
 				
@@ -126,8 +160,8 @@ function this.createUi()
 			end
 			
 			for i = 1, #islandButtons do
-				local col = (i - 1) % portraitsPerRow
-				local row = math.floor((i - 1) / portraitsPerRow)
+				local col = (i) % portraitsPerRow
+				local row = math.floor((i) / portraitsPerRow)
 				local button = islandButtons[i]
 				
 				button:pospx(cellW * col, cellH * row)
@@ -141,11 +175,80 @@ function this.createUi()
 			end
 		end
 		
+		local bheight = 40
+		local twobuttonH = bheight * 2 + gap
+		
+		local newDraw = function(self, screen)
+			if checkbox.checked then
+				self.disabled = true
+			else
+				self.disabled = false
+			end
+			ui.draw(self, screen)
+		end
+		
+		local function addRandomButton()
+			checkbox = UiCheckbox()
+				:widthpx(portraitW):heightpx(bheight)
+				:pospx(0, (portraitH - twobuttonH) * 0.5 + bheight + gap)
+				:settooltip("Randomize Island order each time a new game is started.\n\nRequires game to be restarted with no save file. Complete your current timeline or use ABANDON TIMELINE to remove current save file.")
+				:decorate({
+					DecoCheckbox(),
+					DecoAlign(4, 2),
+					DecoText("Randomize"),
+				})
+				:addTo(scrollarea)
+			
+			checkbox.checked = islandRandomize
+		end
+		
+		local function addDefaultButton()
+			local button = Ui()
+				:widthpx(portraitW):heightpx(bheight)
+				:pospx(0, (portraitH - twobuttonH) * 0.5)
+				:settooltip("Default Island order.\n\nRemember to restart game for changes to take effect.")
+				:decorate({
+					DecoButton(),
+					DecoAlign(23,2),
+					DecoText("Default"),
+				})
+				:addTo(scrollarea)			
+			button.draw = newDraw -- Needed for disabling when Randomize checkbox is set
+			
+			button.onclicked = function()
+				local corps = {
+					"Corp_Grass",
+					"Corp_Desert",
+					"Corp_Snow",
+					"Corp_Factory"
+				}
+				
+				for j = 1,4 do
+					if islandButtons[j].id ~= corps[j] then
+						for i, v in ipairs(islandButtons) do
+							if v.id == corps[j] then
+								islandButtons[i], islandButtons[j] = islandButtons[j], islandButtons[i]
+							end
+						end
+					end
+				end
+
+				for i = 1, #islandButtons do
+					local col = (i) % portraitsPerRow
+					local row = math.floor((i) / portraitsPerRow)
+					local button0 = islandButtons[i]
+					
+					button0:pospx(cellW * col, cellH * row)
+				end
+				return true
+			end
+		end
+		
 		local function addIslandButton(i, id)
 			local island = m.islands[id]
 			local corp = m.corps[island.corp]
-			local col = (i - 1) % portraitsPerRow
-			local row = math.floor((i - 1) / portraitsPerRow)
+			local col = (i) % portraitsPerRow
+			local row = math.floor((i) / portraitsPerRow)
 			
 			local surface = sdl.scaled(2, sdlext.surface("img/portraits/ceo/".. corp.CEO_Image))
 			local button = Ui()
@@ -157,7 +260,8 @@ function this.createUi()
 					DecoAlign(-4),
 					DecoSurface(surface)
 				})
-				:addTo(scrollarea)
+				:addTo(scrollarea)			
+			button.draw = newDraw -- Needed for disabling when Randomize checkbox is set
 			
 			-- Make RST grayscale and lock the button from moving.
 			if not m.unlockRst and id == "Corp_Desert" then
@@ -214,6 +318,9 @@ function this.createUi()
 				rearrange()
 			end
 		end
+		
+		addRandomButton()
+		addDefaultButton()
 		
 		for i = 1, #m.islandOrder do
 			addIslandButton(#islandButtons + 1, m.islandOrder[i])
